@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	// Uncomment this block to pass the first stage!
 	// "os"
 )
@@ -57,8 +58,7 @@ func main() {
 
 		stringBuffer := new(bytes.Buffer)
 		stringBuffer.ReadFrom(reader)
-		fmt.Println(stringBuffer.String())
-		// fmt.Print(strings.Split(stringBuffer.String(), "\000")[1])
+		fmt.Print(strings.Split(stringBuffer.String(), "\000")[1])
 
 	case "hash-object":
 		if len(os.Args) < 3 {
