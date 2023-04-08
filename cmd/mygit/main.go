@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
-	// Uncomment this block to pass the first stage!
-	// "os"
 )
 
 // Usage: your_git.sh <command> <arg1> <arg2> ...
@@ -116,6 +115,51 @@ func main() {
 		}
 		writer.Close()
 		object.Close()
+
+	case "ls-tree":
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "pass the tree object hash: ls-tree --name-only <tree_sha>\n")
+			os.Exit(1)
+		}
+
+		fullSha := os.Args[3]
+		content, err := os.ReadFile(fmt.Sprintf(".git/objects/%s/%s", fullSha[:2], fullSha[2:]))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading blob object (binary data): %s\n", err)
+		}
+
+		objectBuffer := bytes.NewBuffer(content)
+		reader, err := zlib.NewReader(objectBuffer)
+		defer reader.Close()
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error decompressing blob object (binary data): %s\n", err)
+			os.Exit(1)
+		}
+
+		stringBuffer := new(bytes.Buffer)
+		stringBuffer.ReadFrom(reader)
+
+		var result []string
+
+		list := strings.Split(stringBuffer.String(), "\x00")[1:]
+		for i := 0; i < len(list)-1; i++ {
+			temp := strings.Split(list[i], " ")
+			result = append(result, temp[len(temp)-1])
+		}
+
+		sort.Strings(result)
+		for _, item := range result {
+			fmt.Println(item)
+		}
+
+		// to use ToLower pattern
+		// sort.Slice(result, func(i, j int) bool {
+		// 	return strings.ToLower(result[i]) < strings.ToLower(result[j])
+		// })
+		// for _, item := range result {
+		// 	fmt.Println(item)
+		// }
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %s\n", command)
