@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -159,63 +158,70 @@ func lsTreeCmd() {
 }
 
 func writeTreeCmd() {
-	// create data from directories
-	tempMap := getDirectoryInfo(".")
-	for fileName, permission := range tempMap {
-		var flag string
-		if strings.Contains(fileName, ".") {
-			flag = "100"
-			number, _ := strconv.Atoi(permission)
-			permission = fmt.Sprintf("%o", number)
-		} else {
-			flag = "040"
-			permission = "000"
-		}
-		fmt.Printf("%s%s %s\n", flag, permission, fileName)
+	// read info to create git tree object
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading directory")
+		os.Exit(1)
 	}
 
-	// content := []byte("100644 README.md\u000071468c4444dea8f9d01270065d8fefccdf2a04e3")
+	var result []map[string]string
+	for _, entry := range entries {
+		if entry.Name() == ".git" {
+			continue
+		}
+		var tempEntry = make(map[string]string)
+		tempEntry["name"] = entry.Name()
 
-	// // create hash from tempBuffer
-	// hasher := sha1.New()
-	// header := []byte(fmt.Sprintf("blob %d\u0000", len(content)))
-	// if _, err := hasher.Write(header); err != nil {
-	// 	fmt.Fprintf(os.Stderr, "error writing header to create hash")
-	// 	os.Exit(1)
-	// }
-	// if _, err := hasher.Write(content); err != nil {
-	// 	fmt.Fprintf(os.Stderr, "error writing content to create hash")
-	// 	os.Exit(1)
-	// }
-	// hash := fmt.Sprintf("%x", hasher.Sum(nil))
-	// fmt.Println(hash)
+		if entry.Type().IsDir() {
+			tempEntry["type"] = "040"
+		} else if entry.Type().IsRegular() {
+			tempEntry["type"] = "100"
+		}
+		info, err := entry.Info()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error reading file info")
+			os.Exit(1)
+		}
 
-	// // create dir if dir doesn't exist
-	// objectDir := fmt.Sprintf(".git/objects/%s", hash[:2])
-	// if _, err := os.Stat(objectDir); errors.Is(err, os.ErrNotExist) {
-	// 	err := os.MkdirAll(objectDir, 0755)
-	// 	if err != nil {
-	// 		fmt.Fprintf(os.Stderr, "Error creating directory: %s\n", err)
-	// 	}
-	// }
+		if entry.Type().IsDir() {
+			tempEntry["permission"] = "000"
+		} else if entry.Type().IsRegular() {
+			tempEntry["permission"] = fmt.Sprintf("%3o", info.Mode())
+		}
 
-	// // write data to file under .git/objects
-	// objectFilepath := fmt.Sprintf(".git/objects/%s/%s", hash[:2], hash[2:])
-	// object, err := os.OpenFile(objectFilepath, os.O_CREATE|os.O_WRONLY, 0644)
-	// if err != nil {
-	// 	fmt.Fprintf(os.Stderr, "error opening file")
-	// 	os.Exit(1)
-	// }
+		// create hash from tempBuffer
+		hasher := sha1.New()
+		header := []byte(fmt.Sprintf("%s %s\u0000", tempEntry["type"], tempEntry["name"]))
+		if _, err := hasher.Write(header); err != nil {
+			fmt.Fprintf(os.Stderr, "error writing header to create hash")
+			os.Exit(1)
+		}
+		hash := fmt.Sprintf("%x", hasher.Sum(nil))
+		tempEntry["hash"] = hash
 
-	// writer := zlib.NewWriter(object)
-	// if _, err := writer.Write(header); err != nil {
-	// 	fmt.Fprintf(os.Stderr, "error writing header to create compressed data")
-	// 	os.Exit(1)
-	// }
-	// if _, err := writer.Write(content); err != nil {
-	// 	fmt.Fprintf(os.Stderr, "error writing content to create compressed data")
-	// 	os.Exit(1)
-	// }
-	// writer.Close()
-	// object.Close()
+		result = append(result, tempEntry)
+	}
+
+	// create plain git tree object
+	var treeBuffer bytes.Buffer
+	for _, entry := range result {
+		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\x00%s\n", entry["type"], entry["permission"], entry["name"], entry["hash"]))
+	}
+
+	// add header to treeBuffer
+	hasher := sha1.New()
+	header := []byte(fmt.Sprintf("tree %d\u0000", treeBuffer.Len()))
+	if _, err := hasher.Write(header); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing header to create hash")
+		os.Exit(1)
+	}
+	if _, err := hasher.Write(treeBuffer.Bytes()); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing content to create hash")
+		os.Exit(1)
+	}
+	hash := fmt.Sprintf("%x", hasher.Sum(nil))
+	fmt.Println(hash)
+
+	// write data to file under .git/objects and create dir if dir doesn't exist
 }
