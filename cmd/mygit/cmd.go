@@ -167,15 +167,19 @@ func writeTreeCmd() {
 
 	var result []map[string]string
 	for _, entry := range entries {
-		if entry.Name() == ".git" {
+		if strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
 		var tempEntry = make(map[string]string)
 		tempEntry["name"] = entry.Name()
 
+		if !entry.Type().IsRegular() && !entry.Type().IsDir() {
+			continue
+		}
+
 		if entry.Type().IsDir() {
 			// fmt.Println(entry.Name())
-			tempEntry["type"] = "040"
+			tempEntry["type"] = "40"
 		} else if entry.Type().IsRegular() {
 			// fmt.Println(entry.Name())
 			tempEntry["type"] = "100"
@@ -194,11 +198,28 @@ func writeTreeCmd() {
 
 		// create hash from tempBuffer
 		hasher := sha1.New()
-		header := []byte(fmt.Sprintf("%s %s\u0000", tempEntry["type"], tempEntry["name"]))
+
+		// entry format = "#{mode} ${file.name}\0${hash}"
+		header := []byte(fmt.Sprintf("%s%s %s\u0000", tempEntry["type"], tempEntry["permission"], tempEntry["name"]))
 		if _, err := hasher.Write(header); err != nil {
 			fmt.Fprintf(os.Stderr, "error writing header to create hash")
 			os.Exit(1)
 		}
+
+		// add sha-1 hash of file content
+		if entry.Type().IsRegular() {
+			content, err := os.ReadFile(entry.Name())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error reading file content")
+				os.Exit(1)
+			}
+			if _, err := hasher.Write(content); err != nil {
+				fmt.Fprintf(os.Stderr, "error writing content to create hash")
+				os.Exit(1)
+			}
+		}
+
+		// create hash and add to tempEntry
 		hash := fmt.Sprintf("%x", hasher.Sum(nil))
 		tempEntry["hash"] = hash
 
