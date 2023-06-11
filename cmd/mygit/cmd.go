@@ -174,8 +174,10 @@ func writeTreeCmd() {
 		tempEntry["name"] = entry.Name()
 
 		if entry.Type().IsDir() {
+			// fmt.Println(entry.Name())
 			tempEntry["type"] = "040"
 		} else if entry.Type().IsRegular() {
+			// fmt.Println(entry.Name())
 			tempEntry["type"] = "100"
 		}
 		info, err := entry.Info()
@@ -206,7 +208,7 @@ func writeTreeCmd() {
 	// create plain git tree object
 	var treeBuffer bytes.Buffer
 	for _, entry := range result {
-		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\x00%s\n", entry["type"], entry["permission"], entry["name"], entry["hash"]))
+		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\u0000%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
 	}
 
 	// add header to treeBuffer
@@ -216,7 +218,7 @@ func writeTreeCmd() {
 		fmt.Fprintf(os.Stderr, "error writing header to create hash")
 		os.Exit(1)
 	}
-	if _, err := hasher.Write(treeBuffer.Bytes()); err != nil {
+	if _, err := hasher.Write([]byte(treeBuffer.String())); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing content to create hash")
 		os.Exit(1)
 	}
@@ -224,6 +226,15 @@ func writeTreeCmd() {
 	fmt.Println(hash)
 
 	// write data to file under .git/objects and create dir if dir doesn't exist
+	// create dir if dir doesn't exist
+	objectDir := fmt.Sprintf(".git/objects/%s", hash[:2])
+	if _, err := os.Stat(objectDir); errors.Is(err, os.ErrNotExist) {
+		err := os.MkdirAll(objectDir, 0755)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating directory: %s\n", err)
+		}
+	}
+
 	objectFilepath := fmt.Sprintf(".git/objects/%s/%s", hash[:2], hash[2:])
 	object, err := os.OpenFile(objectFilepath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
