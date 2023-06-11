@@ -224,4 +224,22 @@ func writeTreeCmd() {
 	fmt.Println(hash)
 
 	// write data to file under .git/objects and create dir if dir doesn't exist
+	objectFilepath := fmt.Sprintf(".git/objects/%s/%s", hash[:2], hash[2:])
+	object, err := os.OpenFile(objectFilepath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error opening file")
+		os.Exit(1)
+	}
+
+	writer := zlib.NewWriter(object)
+	if _, err := writer.Write(header); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing header to create compressed data")
+		os.Exit(1)
+	}
+	if _, err := writer.Write([]byte(treeBuffer.String())); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing content to create compressed data")
+		os.Exit(1)
+	}
+	writer.Close()
+	object.Close()
 }
