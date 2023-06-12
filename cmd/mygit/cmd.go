@@ -172,7 +172,7 @@ func writeTreeCmd() {
 
 func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 	// read info to create git tree object
-	entries, err := os.ReadDir(".")
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error reading directory")
 		os.Exit(1)
@@ -183,17 +183,6 @@ func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 		var tempEntry = make(map[string]string)
 		tempEntry["name"] = entry.Name()
 
-		if entry.Type().IsDir() {
-			if entry.Name() == ".git" { // Skip .git directory
-				log.Println("skip .git directory")
-				continue
-			}
-			// fmt.Println(entry.Name())
-			tempEntry["type"] = "40"
-		} else if entry.Type().IsRegular() {
-			// fmt.Println(entry.Name())
-			tempEntry["type"] = "100"
-		}
 		info, err := entry.Info()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error reading file info")
@@ -201,9 +190,19 @@ func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 		}
 
 		if entry.Type().IsDir() {
+			if entry.Name() == ".git" { // Skip .git directory
+				log.Println("skip .git directory")
+				continue
+			}
+			// fmt.Println(entry.Name())
+			tempEntry["type"] = "40"
 			tempEntry["permission"] = "000"
+			sha, err = WriteTreeObject(filepath.Join(dir, entry.Name()))
 		} else if entry.Type().IsRegular() {
+			// fmt.Println(entry.Name())
+			tempEntry["type"] = "100"
 			tempEntry["permission"] = fmt.Sprintf("%3o", info.Mode())
+			sha, err = WriteBlobObject(filepath.Join(dir, entry.Name()), info.Mode())
 		}
 
 		// create hash from tempBuffer
@@ -212,20 +211,6 @@ func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 		// entry format = "#{mode} ${file.name}\0${hash}"
 		header := []byte(fmt.Sprintf("%s%s %s\u0000", tempEntry["type"], tempEntry["permission"], tempEntry["name"]))
 		if _, err := hasher.Write(header); err != nil {
-			fmt.Fprintf(os.Stderr, "error writing header to create hash")
-			os.Exit(1)
-		}
-
-		if entry.Type().IsDir() {
-			if entry.Name() == ".git" { // Skip .git directory
-				log.Println("skip .git directory")
-				continue
-			}
-			sha, err = WriteTreeObject(filepath.Join(dir, entry.Name()))
-		} else {
-			sha, err = WriteBlobObject(filepath.Join(dir, entry.Name()), info.Mode())
-		}
-		if err != nil {
 			fmt.Fprintf(os.Stderr, "error writing header to create hash")
 			os.Exit(1)
 		}
