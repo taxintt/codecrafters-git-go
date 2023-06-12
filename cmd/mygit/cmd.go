@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -234,8 +236,9 @@ func writeTreeCmd() {
 
 	// add header to treeBuffer
 	hasher := sha1.New()
-	header := []byte(fmt.Sprintf("tree %d\u0000", treeBuffer.Len()))
-	if _, err := hasher.Write(header); err != nil {
+	header := fmt.Sprintf("tree %d\u0000", treeBuffer.Len())
+
+	if _, err := hasher.Write([]byte(header)); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing header to create hash")
 		os.Exit(1)
 	}
@@ -246,32 +249,42 @@ func writeTreeCmd() {
 	hash := fmt.Sprintf("%x", hasher.Sum(nil))
 	fmt.Println(hash)
 
-	// write data to file under .git/objects and create dir if dir doesn't exist
-	// create dir if dir doesn't exist
-	objectDir := fmt.Sprintf(".git/objects/%s", hash[:2])
-	if _, err := os.Stat(objectDir); errors.Is(err, os.ErrNotExist) {
-		err := os.MkdirAll(objectDir, 0755)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating directory: %s\n", err)
-		}
-	}
+	writeObject(header, treeBuffer.Bytes())
+}
 
-	objectFilepath := fmt.Sprintf(".git/objects/%s/%s", hash[:2], hash[2:])
-	object, err := os.OpenFile(objectFilepath, os.O_CREATE|os.O_WRONLY, 0644)
+func writeObject(header string, content []byte) (sha [20]byte, _ error) {
+	var data bytes.Buffer
+	if _, err := data.WriteString(header); err != nil {
+		return sha, err
+	}
+	if _, err := data.Write(content); err != nil {
+		return sha, err
+	}
+	// calculate SHA1 from header and content
+	sha = sha1.Sum(data.Bytes())
+	shaStr := fmt.Sprintf("%x", sha)
+	log.Printf("SHA: %x", sha)
+	path := objectPath(shaStr)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		// already exists or unexpected errors
+		return sha, err
+	}
+	if err := os.Mkdir(filepath.Dir(path), 0750); err != nil && !os.IsExist(err) {
+		return sha, err
+	}
+	object, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file")
-		os.Exit(1)
+		return sha, err
 	}
-
 	writer := zlib.NewWriter(object)
-	if _, err := writer.Write(header); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing header to create compressed data")
-		os.Exit(1)
-	}
-	if _, err := writer.Write([]byte(treeBuffer.String())); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing content to create compressed data")
-		os.Exit(1)
+	if _, err := writer.Write(data.Bytes()); err != nil {
+		return sha, err
 	}
 	writer.Close()
 	object.Close()
+	return sha, nil
+}
+
+func objectPath(sha string) string {
+	return filepath.Join(".git", "objects", sha[:2], sha[2:])
 }
