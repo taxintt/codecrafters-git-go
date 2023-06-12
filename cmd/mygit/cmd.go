@@ -205,23 +205,14 @@ func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 			sha, err = WriteBlobObject(filepath.Join(dir, entry.Name()), info.Mode())
 		}
 
-		// create hash from tempBuffer
-		hasher := sha1.New()
-
-		// entry format = "#{mode} ${file.name}\0${hash}"
-		header := []byte(fmt.Sprintf("%s%s %s\u0000", tempEntry["type"], tempEntry["permission"], tempEntry["name"]))
-		if _, err := hasher.Write(header); err != nil {
-			fmt.Fprintf(os.Stderr, "error writing header to create hash")
-			os.Exit(1)
-		}
-
 		result = append(result, tempEntry)
 	}
 
 	// create plain git tree object
 	var treeBuffer bytes.Buffer
 	for _, entry := range result {
-		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\u0000%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
+		log.Printf(fmt.Sprintf("%s%s %s\x00%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
+		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\x00%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
 	}
 	header := fmt.Sprintf("tree %d\x00", treeBuffer.Len())
 	return writeObject(header, treeBuffer.Bytes())
