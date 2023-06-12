@@ -234,7 +234,12 @@ func writeTreeCmd() {
 		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\u0000%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
 	}
 	header := fmt.Sprintf("tree %d\x00", treeBuffer.Len())
-	writeObject(header, treeBuffer.Bytes())
+	sha, err := writeObject(header, treeBuffer.Bytes())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error writing tree object")
+		os.Exit(1)
+	}
+	fmt.Println(sha)
 }
 
 func writeObject(header string, content []byte) (sha [20]byte, _ error) {
