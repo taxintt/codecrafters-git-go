@@ -233,22 +233,7 @@ func writeTreeCmd() {
 	for _, entry := range result {
 		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\u0000%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
 	}
-
-	// add header to treeBuffer
-	hasher := sha1.New()
-	header := fmt.Sprintf("tree %d\u0000", treeBuffer.Len())
-
-	if _, err := hasher.Write([]byte(header)); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing header to create hash")
-		os.Exit(1)
-	}
-	if _, err := hasher.Write([]byte(treeBuffer.String())); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing content to create hash")
-		os.Exit(1)
-	}
-	hash := fmt.Sprintf("%x", hasher.Sum(nil))
-	fmt.Println(hash)
-
+	header := fmt.Sprintf("tree %d\x00", treeBuffer.Len())
 	writeObject(header, treeBuffer.Bytes())
 }
 
