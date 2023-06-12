@@ -239,7 +239,7 @@ func writeTreeCmd() {
 		fmt.Fprintf(os.Stderr, "error writing tree object")
 		os.Exit(1)
 	}
-	fmt.Println(sha)
+	fmt.Printf("%x\n", sha)
 }
 
 func writeObject(header string, content []byte) (sha [20]byte, _ error) {
