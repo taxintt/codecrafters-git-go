@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"os"
@@ -160,6 +161,16 @@ func lsTreeCmd() {
 }
 
 func writeTreeCmd() {
+	workDir, err := filepath.Abs(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading directory")
+		os.Exit(1)
+	}
+	sha, err := WriteTreeObject(workDir)
+	fmt.Printf("%x\n", sha)
+}
+
+func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 	// read info to create git tree object
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -169,17 +180,14 @@ func writeTreeCmd() {
 
 	var result []map[string]string
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
 		var tempEntry = make(map[string]string)
 		tempEntry["name"] = entry.Name()
 
-		if !entry.Type().IsRegular() && !entry.Type().IsDir() {
-			continue
-		}
-
 		if entry.Type().IsDir() {
+			if entry.Name() == ".git" { // Skip .git directory
+				log.Println("skip .git directory")
+				continue
+			}
 			// fmt.Println(entry.Name())
 			tempEntry["type"] = "40"
 		} else if entry.Type().IsRegular() {
@@ -208,22 +216,19 @@ func writeTreeCmd() {
 			os.Exit(1)
 		}
 
-		// add sha-1 hash of file content
-		if entry.Type().IsRegular() {
-			content, err := os.ReadFile(entry.Name())
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "error reading file content")
-				os.Exit(1)
+		if entry.Type().IsDir() {
+			if entry.Name() == ".git" { // Skip .git directory
+				log.Println("skip .git directory")
+				continue
 			}
-			if _, err := hasher.Write(content); err != nil {
-				fmt.Fprintf(os.Stderr, "error writing content to create hash")
-				os.Exit(1)
-			}
+			sha, err = WriteTreeObject(filepath.Join(dir, entry.Name()))
+		} else {
+			sha, err = WriteBlobObject(filepath.Join(dir, entry.Name()), info.Mode())
 		}
-
-		// create hash and add to tempEntry
-		hash := fmt.Sprintf("%x", hasher.Sum(nil))
-		tempEntry["hash"] = hash
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error writing header to create hash")
+			os.Exit(1)
+		}
 
 		result = append(result, tempEntry)
 	}
@@ -234,12 +239,19 @@ func writeTreeCmd() {
 		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\u0000%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
 	}
 	header := fmt.Sprintf("tree %d\x00", treeBuffer.Len())
-	sha, err := writeObject(header, treeBuffer.Bytes())
+	return writeObject(header, treeBuffer.Bytes())
+}
+
+func WriteBlobObject(file string, mode fs.FileMode) (sha [20]byte, _ error) {
+	content, err := ioutil.ReadFile(file)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error writing tree object")
-		os.Exit(1)
+		return sha, err
 	}
-	fmt.Printf("%x\n", sha)
+	// header format = "blob #{content.bytesize}\0"
+	// see https://git-scm.com/book/en/v2/Git-Internals-Git-Objects for details.
+	header := fmt.Sprintf("blob %d\x00", len(content))
+	log.Printf("Write blob: %s", file)
+	return writeObject(header, content)
 }
 
 func writeObject(header string, content []byte) (sha [20]byte, _ error) {
