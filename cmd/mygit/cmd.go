@@ -178,11 +178,10 @@ func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 		os.Exit(1)
 	}
 
-	var result []map[string]string
+	var treeBuffer bytes.Buffer
 	for _, entry := range entries {
-		var tempEntry = make(map[string]string)
-		tempEntry["name"] = entry.Name()
-
+		var mode, permission string
+		var sha [20]byte
 		info, err := entry.Info()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error reading file info")
@@ -194,26 +193,18 @@ func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 				log.Println("skip .git directory")
 				continue
 			}
-			// fmt.Println(entry.Name())
-			tempEntry["type"] = "40"
-			tempEntry["permission"] = "000"
+			mode = "40"
+			permission = "000"
 			sha, err = WriteTreeObject(filepath.Join(dir, entry.Name()))
 		} else if entry.Type().IsRegular() {
-			// fmt.Println(entry.Name())
-			tempEntry["type"] = "100"
-			tempEntry["permission"] = fmt.Sprintf("%3o", info.Mode())
+			mode = "100"
+			permission = fmt.Sprintf("%3o", info.Mode())
 			sha, err = WriteBlobObject(filepath.Join(dir, entry.Name()), info.Mode())
 		}
 
-		result = append(result, tempEntry)
+		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\x00%s", mode, permission, entry.Name(), sha))
 	}
 
-	// create plain git tree object
-	var treeBuffer bytes.Buffer
-	for _, entry := range result {
-		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\x00%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
-		log.Printf(fmt.Sprintf("%s%s %s\x00%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
-	}
 	header := fmt.Sprintf("tree %d\x00", treeBuffer.Len())
 	return writeObject(header, treeBuffer.Bytes())
 }
