@@ -212,6 +212,7 @@ func WriteTreeObject(dir string) (sha [20]byte, _ error) {
 	var treeBuffer bytes.Buffer
 	for _, entry := range result {
 		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\x00%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
+		log.Printf(fmt.Sprintf("%s%s %s\x00%s", entry["type"], entry["permission"], entry["name"], entry["hash"]))
 	}
 	header := fmt.Sprintf("tree %d\x00", treeBuffer.Len())
 	return writeObject(header, treeBuffer.Bytes())
