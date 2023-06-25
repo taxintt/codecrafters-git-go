@@ -99,3 +99,15 @@ func writeObject(header string, content []byte) (sha [20]byte, _ error) {
 func objectPath(sha string) string {
 	return filepath.Join(".git", "objects", sha[:2], sha[2:])
 }
+
+func createHash(content []byte) (string, error) {
+	hasher := sha1.New()
+	header := []byte(fmt.Sprintf("blob %d\x00", len(content)))
+	if _, err := hasher.Write(header); err != nil {
+		return "", fmt.Errorf("error writing content to create hash: %s", err)
+	}
+	if _, err := hasher.Write(content); err != nil {
+		return "", fmt.Errorf("error writing content to create hash: %s", err)
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}

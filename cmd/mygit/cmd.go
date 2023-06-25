@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
-	"crypto/sha1"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -99,21 +98,13 @@ func hashObjectCmd() *Status {
 	}
 
 	// create hash from tempBuffer
-	hasher := sha1.New()
-	header := []byte(fmt.Sprintf("blob %d\x00", len(content)))
-	if _, err := hasher.Write(header); err != nil {
+	hash, err := createHash(content)
+	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
-			err:      fmt.Errorf("error writing header to create hash"),
+			err:      fmt.Errorf("error creating hash"),
 		}
 	}
-	if _, err := hasher.Write(content); err != nil {
-		return &Status{
-			exitCode: ExitCodeError,
-			err:      fmt.Errorf("error writing content to create hash"),
-		}
-	}
-	hash := fmt.Sprintf("%x", hasher.Sum(nil))
 	fmt.Println(hash)
 
 	// create dir if dir doesn't exist
@@ -138,6 +129,7 @@ func hashObjectCmd() *Status {
 	}
 
 	writer := zlib.NewWriter(object)
+	header := []byte(fmt.Sprintf("blob %d\x00", len(content)))
 	if _, err := writer.Write(header); err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
@@ -177,8 +169,7 @@ func lsTreeCmd() *Status {
 		}
 	}
 
-	objectBuffer := bytes.NewBuffer(content)
-	reader, err := zlib.NewReader(objectBuffer)
+	reader, err := zlib.NewReader(bytes.NewBuffer(content))
 	defer reader.Close()
 
 	if err != nil {
@@ -188,14 +179,14 @@ func lsTreeCmd() *Status {
 		}
 	}
 
-	stringBuffer := new(bytes.Buffer)
-	stringBuffer.ReadFrom(reader)
+	fileContentBuffer := new(bytes.Buffer)
+	fileContentBuffer.ReadFrom(reader)
 
 	var result []string
 
-	list := strings.Split(stringBuffer.String(), "\x00")[1:]
-	for i := 0; i < len(list)-1; i++ {
-		temp := strings.Split(list[i], " ")
+	fileContentlist := strings.Split(fileContentBuffer.String(), "\x00")[1:]
+	for i := 0; i < len(fileContentlist)-1; i++ {
+		temp := strings.Split(fileContentlist[i], " ")
 		result = append(result, temp[len(temp)-1])
 	}
 
