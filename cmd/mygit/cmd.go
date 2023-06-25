@@ -13,9 +13,7 @@ import (
 	"strings"
 )
 
-var ExitCodeOK int = 0
-var ExitCodeError int = 1
-
+// ./your_git.sh init
 func initCmd() *Status {
 	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -41,6 +39,7 @@ func initCmd() *Status {
 	}
 }
 
+// ./your_git.sh cat-file -p <blob_sha>
 func catFileCmd() *Status {
 	if len(os.Args) < 3 {
 		return &Status{
@@ -50,7 +49,7 @@ func catFileCmd() *Status {
 	}
 
 	fullSha := os.Args[3]
-	content, err := os.ReadFile(fmt.Sprintf(".git/objects/%s/%s", fullSha[:2], fullSha[2:]))
+	content, err := os.ReadFile(objectPath(fullSha))
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
@@ -58,8 +57,7 @@ func catFileCmd() *Status {
 		}
 	}
 
-	objectBuffer := bytes.NewBuffer(content)
-	reader, err := zlib.NewReader(objectBuffer)
+	reader, err := zlib.NewReader(bytes.NewBuffer(content))
 	defer reader.Close()
 
 	if err != nil {
@@ -69,9 +67,11 @@ func catFileCmd() *Status {
 		}
 	}
 
-	stringBuffer := new(bytes.Buffer)
-	stringBuffer.ReadFrom(reader)
-	fmt.Print(strings.Split(stringBuffer.String(), "\000")[1])
+	fileContentBuffer := new(bytes.Buffer)
+	fileContentBuffer.ReadFrom(reader)
+
+	// blob(object type) 4(size)\000test(content)
+	fmt.Print(strings.Split(fileContentBuffer.String(), "\x00")[1])
 
 	return &Status{
 		exitCode: ExitCodeOK,
@@ -79,6 +79,7 @@ func catFileCmd() *Status {
 	}
 }
 
+// ./your_git.sh hash-object -w <file>
 func hashObjectCmd() *Status {
 	if len(os.Args) < 3 {
 		return &Status{
@@ -99,7 +100,7 @@ func hashObjectCmd() *Status {
 
 	// create hash from tempBuffer
 	hasher := sha1.New()
-	header := []byte(fmt.Sprintf("blob %d\u0000", len(content)))
+	header := []byte(fmt.Sprintf("blob %d\x00", len(content)))
 	if _, err := hasher.Write(header); err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
@@ -128,8 +129,7 @@ func hashObjectCmd() *Status {
 	}
 
 	// write data to file under .git/objects
-	objectFilepath := fmt.Sprintf(".git/objects/%s/%s", hash[:2], hash[2:])
-	object, err := os.OpenFile(objectFilepath, os.O_CREATE|os.O_WRONLY, 0644)
+	object, err := os.OpenFile(objectPath(hash), os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
@@ -159,6 +159,7 @@ func hashObjectCmd() *Status {
 	}
 }
 
+// ./your_git.sh ls-tree --name-only <tree_sha>
 func lsTreeCmd() *Status {
 	if len(os.Args) < 3 {
 		return &Status{
@@ -168,7 +169,7 @@ func lsTreeCmd() *Status {
 	}
 
 	fullSha := os.Args[3]
-	content, err := os.ReadFile(fmt.Sprintf(".git/objects/%s/%s", fullSha[:2], fullSha[2:]))
+	content, err := os.ReadFile(objectPath(fullSha))
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
@@ -217,27 +218,36 @@ func lsTreeCmd() *Status {
 }
 
 // ./your_git.sh commit-tree <tree_sha> -p <commit_sha> -m <message>
-// func createCommitCmd() int {
-// 	if len(os.Args) < 3 {
-// 		fmt.Fprintf(os.Stderr, "pass the tree object hash: <tree_sha>\n")
-// 		return ExitCodeError
-// 	}
+func createCommitCmd() *Status {
+	// if len(os.Args) < 3 {
+	// 	return &Status{
+	// 		exitCode: ExitCodeError,
+	// 		err:      fmt.Errorf("pass the tree object hash: <tree_sha>\n"),
+	// 	}
+	// }
 
-// 	tree_sha := os.Args[2]
-// 	fmt.Println(tree_sha)
+	// tree_sha := os.Args[2]
+	// fmt.Println(tree_sha)
 
-// 	commit_sha := os.Args[4]
-// 	fmt.Println(commit_sha)
+	// commit_sha := os.Args[4]
+	// fmt.Println(commit_sha)
 
-// 	sha, err := writeObject(header, treeBuffer.Bytes())
-// 	if err != nil {
-// 		fmt.Fprintf(os.Stderr, "error reading directory")
-// 		return ExitCodeError
-// 	}
-// 	fmt.Printf("%x\n", sha)
-// 	return ExitCodeOK
-// }
+	// sha, err := writeObject(header, treeBuffer.Bytes())
+	// if err != nil {
+	// 	return &Status{
+	// 		exitCode: ExitCodeError,
+	// 		err:      fmt.Errorf("error reading directory: %s\n", err),
+	// 	}
+	// }
+	// fmt.Printf("%x\n", sha)
 
+	return &Status{
+		exitCode: ExitCodeOK,
+		err:      nil,
+	}
+}
+
+// ./your_git.sh write-tree
 func writeTreeCmd() *Status {
 	workDir, err := filepath.Abs(".")
 	if err != nil {
