@@ -5,6 +5,9 @@ import (
 	"os"
 )
 
+var ExitCodeOK int = 0
+var ExitCodeError int = 1
+
 type Status struct {
 	exitCode int
 	err      error
@@ -41,12 +44,12 @@ func run(args []string) *Status {
 	case "write-tree":
 		result = writeTreeCmd()
 
-	// case "commit-tree":
-	// 	return createCommitCmd()
+	case "commit-tree":
+		result = createCommitCmd()
 
 	default:
 		return &Status{
-			exitCode: 1,
+			exitCode: ExitCodeError,
 			err:      fmt.Errorf("unknown command %q", command),
 		}
 	}
