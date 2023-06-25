@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func WriteTreeObject(dir string) (sha [20]byte, _ error) {
@@ -64,10 +65,13 @@ func WriteBlobObject(file string, mode fs.FileMode) (sha [20]byte, _ error) {
 }
 
 func WriteCommitObject(treeSha string, commit_sha string, message string) (sha [20]byte, _ error) {
+	now := time.Now().Local()
+	timestamp := fmt.Sprintf("%d %s", now.Unix(), now.Format("-0700"))
+
 	content := fmt.Sprintf("tree %s\n", treeSha)
 	content += fmt.Sprintf("parent %s\n", commit_sha)
-	content += fmt.Sprintf("author %s\n", "test")
-	content += fmt.Sprintf("committer %s\n\n", "test")
+	content += fmt.Sprintf("author %s <dummy@example.com> %s\n", "test", timestamp)
+	content += fmt.Sprintf("committer %s <dummy@example.com> %s\n\n", "test", timestamp)
 	content += fmt.Sprintf("%s\n", message)
 	return writeObject(fmt.Sprintf("commit %d\x00", len(message)), []byte(content))
 }
