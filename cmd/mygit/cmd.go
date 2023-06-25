@@ -48,7 +48,7 @@ func catFileCmd() *Status {
 	}
 
 	fullSha := os.Args[3]
-	content, err := os.ReadFile(objectPath(fullSha))
+	content, err := catObject(fullSha)
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
@@ -56,21 +56,8 @@ func catFileCmd() *Status {
 		}
 	}
 
-	reader, err := zlib.NewReader(bytes.NewBuffer(content))
-	defer reader.Close()
-
-	if err != nil {
-		return &Status{
-			exitCode: ExitCodeError,
-			err:      fmt.Errorf("Error decompressing blob object (binary data): %s\n", err),
-		}
-	}
-
-	fileContentBuffer := new(bytes.Buffer)
-	fileContentBuffer.ReadFrom(reader)
-
 	// blob(object type) 4(size)\000test(content)
-	fmt.Print(strings.Split(fileContentBuffer.String(), "\x00")[1])
+	fmt.Print(strings.Split(content.String(), "\x00")[1])
 
 	return &Status{
 		exitCode: ExitCodeOK,
@@ -210,27 +197,27 @@ func lsTreeCmd() *Status {
 
 // ./your_git.sh commit-tree <tree_sha> -p <commit_sha> -m <message>
 func createCommitCmd() *Status {
-	// if len(os.Args) < 3 {
-	// 	return &Status{
-	// 		exitCode: ExitCodeError,
-	// 		err:      fmt.Errorf("pass the tree object hash: <tree_sha>\n"),
-	// 	}
-	// }
+	if len(os.Args) < 3 {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("pass the tree object hash: <tree_sha>\n"),
+		}
+	}
 
-	// tree_sha := os.Args[2]
-	// fmt.Println(tree_sha)
+	tree_sha := os.Args[2]
+	fmt.Println(tree_sha)
 
-	// commit_sha := os.Args[4]
-	// fmt.Println(commit_sha)
+	commit_sha := os.Args[4]
+	fmt.Println(commit_sha)
 
-	// sha, err := writeObject(header, treeBuffer.Bytes())
-	// if err != nil {
-	// 	return &Status{
-	// 		exitCode: ExitCodeError,
-	// 		err:      fmt.Errorf("error reading directory: %s\n", err),
-	// 	}
-	// }
-	// fmt.Printf("%x\n", sha)
+	sha, err := writeObject(header, treeBuffer.Bytes())
+	if err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error reading directory: %s\n", err),
+		}
+	}
+	fmt.Printf("%x\n", sha)
 
 	return &Status{
 		exitCode: ExitCodeOK,

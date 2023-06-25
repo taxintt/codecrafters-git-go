@@ -96,6 +96,24 @@ func writeObject(header string, content []byte) (sha [20]byte, _ error) {
 	return sha, nil
 }
 
+func catObject(sha string) (*bytes.Buffer, error) {
+	content, err := os.ReadFile(objectPath(sha))
+	if err != nil {
+		return nil, fmt.Errorf("Error reading blob object: %s\n", err)
+	}
+
+	reader, err := zlib.NewReader(bytes.NewBuffer(content))
+	defer reader.Close()
+
+	if err != nil {
+		return nil, fmt.Errorf("Error reading blob object: %s\n", err)
+	}
+
+	fileContentBuffer := new(bytes.Buffer)
+	fileContentBuffer.ReadFrom(reader)
+	return fileContentBuffer, nil
+}
+
 func objectPath(sha string) string {
 	return filepath.Join(".git", "objects", sha[:2], sha[2:])
 }
