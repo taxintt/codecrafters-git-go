@@ -63,6 +63,15 @@ func WriteBlobObject(file string, mode fs.FileMode) (sha [20]byte, _ error) {
 	return writeObject(header, content)
 }
 
+func WriteCommitObject(treeSha string, commit_sha string, message string) (sha [20]byte, _ error) {
+	content := fmt.Sprintf("tree %s\n", treeSha)
+	content += fmt.Sprintf("parent %s\n", commit_sha)
+	content += fmt.Sprintf("author %s\n", "test")
+	content += fmt.Sprintf("committer %s\n\n", "test")
+	content += message
+	return writeObject(fmt.Sprintf("commit %d\x00", len(message)), []byte(content))
+}
+
 func writeObject(header string, content []byte) (sha [20]byte, _ error) {
 	var data bytes.Buffer
 	if _, err := data.WriteString(header); err != nil {
