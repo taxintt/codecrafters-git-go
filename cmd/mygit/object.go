@@ -68,7 +68,7 @@ func WriteCommitObject(treeSha string, commit_sha string, message string) (sha [
 	content += fmt.Sprintf("parent %s\n", commit_sha)
 	content += fmt.Sprintf("author %s\n", "test")
 	content += fmt.Sprintf("committer %s\n\n", "test")
-	content += message
+	content += fmt.Sprintf("%s\n", message)
 	return writeObject(fmt.Sprintf("commit %d\x00", len(message)), []byte(content))
 }
 
