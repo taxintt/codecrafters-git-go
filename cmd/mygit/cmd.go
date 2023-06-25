@@ -6,40 +6,56 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-func initCmd() {
+var ExitCodeOK int = 0
+var ExitCodeError int = 1
+
+func initCmd() *Status {
 	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating directory: %s\n", err)
+			return &Status{
+				exitCode: ExitCodeError,
+				err:      fmt.Errorf("Error creating directory: %s\n", err.Error()),
+			}
 		}
 	}
 
 	headFileContents := []byte("ref: refs/heads/master\n")
 	if err := os.WriteFile(".git/HEAD", headFileContents, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing file: %s\n", err)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("Error writing file: %s\n", err.Error()),
+		}
 	}
 
 	fmt.Println("Initialized git directory")
+	return &Status{
+		exitCode: ExitCodeOK,
+		err:      nil,
+	}
 }
 
-func catFileCmd() {
+func catFileCmd() *Status {
 	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "specify the sha of blob object: cat-file -p <blob_sha>\n")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("specify the sha of blob object: cat-file -p <blob_sha>\n"),
+		}
 	}
 
 	fullSha := os.Args[3]
 	content, err := os.ReadFile(fmt.Sprintf(".git/objects/%s/%s", fullSha[:2], fullSha[2:]))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading blob object (binary data): %s\n", err)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("Error reading blob object (binary data): %s\n", err),
+		}
 	}
 
 	objectBuffer := bytes.NewBuffer(content)
@@ -47,39 +63,54 @@ func catFileCmd() {
 	defer reader.Close()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error decompressing blob object (binary data): %s\n", err)
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("Error decompressing blob object (binary data): %s\n", err),
+		}
 	}
 
 	stringBuffer := new(bytes.Buffer)
 	stringBuffer.ReadFrom(reader)
 	fmt.Print(strings.Split(stringBuffer.String(), "\000")[1])
+
+	return &Status{
+		exitCode: ExitCodeOK,
+		err:      nil,
+	}
 }
 
-func hashObjectCmd() {
+func hashObjectCmd() *Status {
 	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "pass the content of file: hash-object -w <file>\n")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("pass the content of file: hash-object -w <file>\n"),
+		}
 	}
 
 	// read data from file
 	filePath := os.Args[3]
 	content, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading file content")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error reading file content"),
+		}
 	}
 
 	// create hash from tempBuffer
 	hasher := sha1.New()
 	header := []byte(fmt.Sprintf("blob %d\u0000", len(content)))
 	if _, err := hasher.Write(header); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing header to create hash")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error writing header to create hash"),
+		}
 	}
 	if _, err := hasher.Write(content); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing content to create hash")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error writing content to create hash"),
+		}
 	}
 	hash := fmt.Sprintf("%x", hasher.Sum(nil))
 	fmt.Println(hash)
@@ -89,7 +120,10 @@ func hashObjectCmd() {
 	if _, err := os.Stat(objectDir); errors.Is(err, os.ErrNotExist) {
 		err := os.MkdirAll(objectDir, 0755)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating directory: %s\n", err)
+			return &Status{
+				exitCode: ExitCodeError,
+				err:      fmt.Errorf("Error creating directory: %s\n", err),
+			}
 		}
 	}
 
@@ -97,33 +131,49 @@ func hashObjectCmd() {
 	objectFilepath := fmt.Sprintf(".git/objects/%s/%s", hash[:2], hash[2:])
 	object, err := os.OpenFile(objectFilepath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error opening file")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error opening file"),
+		}
 	}
 
 	writer := zlib.NewWriter(object)
 	if _, err := writer.Write(header); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing header to create compressed data")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error writing header to create compressed data"),
+		}
 	}
 	if _, err := writer.Write(content); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing content to create compressed data")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error writing content to create compressed data"),
+		}
 	}
 	writer.Close()
 	object.Close()
+
+	return &Status{
+		exitCode: ExitCodeOK,
+		err:      nil,
+	}
 }
 
-func lsTreeCmd() {
+func lsTreeCmd() *Status {
 	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "pass the tree object hash: ls-tree --name-only <tree_sha>\n")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("pass the tree object hash: ls-tree --name-only <tree_sha>\n"),
+		}
 	}
 
 	fullSha := os.Args[3]
 	content, err := os.ReadFile(fmt.Sprintf(".git/objects/%s/%s", fullSha[:2], fullSha[2:]))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading blob object (binary data): %s\n", err)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("Error reading blob object (binary data): %s\n", err),
+		}
 	}
 
 	objectBuffer := bytes.NewBuffer(content)
@@ -131,8 +181,10 @@ func lsTreeCmd() {
 	defer reader.Close()
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error decompressing blob object (binary data): %s\n", err)
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("Error decompressing blob object (binary data): %s\n", err),
+		}
 	}
 
 	stringBuffer := new(bytes.Buffer)
@@ -158,102 +210,55 @@ func lsTreeCmd() {
 	// for _, item := range result {
 	// 	fmt.Println(item)
 	// }
+	return &Status{
+		exitCode: ExitCodeOK,
+		err:      nil,
+	}
 }
 
-func writeTreeCmd() {
+// ./your_git.sh commit-tree <tree_sha> -p <commit_sha> -m <message>
+// func createCommitCmd() int {
+// 	if len(os.Args) < 3 {
+// 		fmt.Fprintf(os.Stderr, "pass the tree object hash: <tree_sha>\n")
+// 		return ExitCodeError
+// 	}
+
+// 	tree_sha := os.Args[2]
+// 	fmt.Println(tree_sha)
+
+// 	commit_sha := os.Args[4]
+// 	fmt.Println(commit_sha)
+
+// 	sha, err := writeObject(header, treeBuffer.Bytes())
+// 	if err != nil {
+// 		fmt.Fprintf(os.Stderr, "error reading directory")
+// 		return ExitCodeError
+// 	}
+// 	fmt.Printf("%x\n", sha)
+// 	return ExitCodeOK
+// }
+
+func writeTreeCmd() *Status {
 	workDir, err := filepath.Abs(".")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading directory")
-		os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error reading directory: %s\n", err),
+		}
 	}
+
 	sha, err := WriteTreeObject(workDir)
 	fmt.Printf("%x\n", sha)
-}
 
-func WriteTreeObject(dir string) (sha [20]byte, _ error) {
-	// read info to create git tree object
-	entries, err := os.ReadDir(dir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading directory")
-		os.Exit(1)
-	}
-
-	var treeBuffer bytes.Buffer
-	for _, entry := range entries {
-		var mode, permission string
-		var sha [20]byte
-		info, err := entry.Info()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error reading file info")
-			os.Exit(1)
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error writing tree object: %s\n", err),
 		}
-
-		if entry.Type().IsDir() {
-			if entry.Name() == ".git" { // Skip .git directory
-				log.Println("skip .git directory")
-				continue
-			}
-			mode = "40"
-			permission = "000"
-			sha, err = WriteTreeObject(filepath.Join(dir, entry.Name()))
-		} else if entry.Type().IsRegular() {
-			mode = "100"
-			permission = fmt.Sprintf("%3o", info.Mode())
-			sha, err = WriteBlobObject(filepath.Join(dir, entry.Name()), info.Mode())
-		}
-
-		treeBuffer.WriteString(fmt.Sprintf("%s%s %s\x00%s", mode, permission, entry.Name(), sha))
 	}
 
-	header := fmt.Sprintf("tree %d\x00", treeBuffer.Len())
-	return writeObject(header, treeBuffer.Bytes())
-}
-
-func WriteBlobObject(file string, mode fs.FileMode) (sha [20]byte, _ error) {
-	content, err := ioutil.ReadFile(file)
-	if err != nil {
-		return sha, err
+	return &Status{
+		exitCode: ExitCodeOK,
+		err:      nil,
 	}
-	// header format = "blob #{content.bytesize}\0"
-	// see https://git-scm.com/book/en/v2/Git-Internals-Git-Objects for details.
-	header := fmt.Sprintf("blob %d\x00", len(content))
-	log.Printf("Write blob: %s", file)
-	return writeObject(header, content)
-}
-
-func writeObject(header string, content []byte) (sha [20]byte, _ error) {
-	var data bytes.Buffer
-	if _, err := data.WriteString(header); err != nil {
-		return sha, err
-	}
-	if _, err := data.Write(content); err != nil {
-		return sha, err
-	}
-	// calculate SHA1 from header and content
-	sha = sha1.Sum(data.Bytes())
-	shaStr := fmt.Sprintf("%x", sha)
-	log.Printf("SHA: %x", sha)
-	path := objectPath(shaStr)
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		// already exists or unexpected errors
-		return sha, err
-	}
-	if err := os.Mkdir(filepath.Dir(path), 0750); err != nil && !os.IsExist(err) {
-		return sha, err
-	}
-	object, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return sha, err
-	}
-	writer := zlib.NewWriter(object)
-	if _, err := writer.Write(data.Bytes()); err != nil {
-		return sha, err
-	}
-	writer.Close()
-	object.Close()
-	return sha, nil
-}
-
-func objectPath(sha string) string {
-	return filepath.Join(".git", "objects", sha[:2], sha[2:])
 }
