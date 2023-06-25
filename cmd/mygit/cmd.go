@@ -197,27 +197,27 @@ func lsTreeCmd() *Status {
 
 // ./your_git.sh commit-tree <tree_sha> -p <commit_sha> -m <message>
 func createCommitCmd() *Status {
-	if len(os.Args) < 3 {
-		return &Status{
-			exitCode: ExitCodeError,
-			err:      fmt.Errorf("pass the tree object hash: <tree_sha>\n"),
-		}
-	}
+	// if len(os.Args) < 3 {
+	// 	return &Status{
+	// 		exitCode: ExitCodeError,
+	// 		err:      fmt.Errorf("pass the tree object hash: <tree_sha>\n"),
+	// 	}
+	// }
 
-	tree_sha := os.Args[2]
-	fmt.Println(tree_sha)
+	// tree_sha := os.Args[2]
+	// fmt.Println(tree_sha)
 
-	commit_sha := os.Args[4]
-	fmt.Println(commit_sha)
+	// commit_sha := os.Args[4]
+	// fmt.Println(commit_sha)
 
-	sha, err := writeObject(header, treeBuffer.Bytes())
-	if err != nil {
-		return &Status{
-			exitCode: ExitCodeError,
-			err:      fmt.Errorf("error reading directory: %s\n", err),
-		}
-	}
-	fmt.Printf("%x\n", sha)
+	// sha, err := writeObject(header, treeBuffer.Bytes())
+	// if err != nil {
+	// 	return &Status{
+	// 		exitCode: ExitCodeError,
+	// 		err:      fmt.Errorf("error reading directory: %s\n", err),
+	// 	}
+	// }
+	// fmt.Printf("%x\n", sha)
 
 	return &Status{
 		exitCode: ExitCodeOK,
