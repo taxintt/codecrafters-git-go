@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"compress/zlib"
 	"errors"
 	"fmt"
@@ -48,7 +47,7 @@ func catFileCmd() *Status {
 	}
 
 	fullSha := os.Args[3]
-	content, err := catObject(fullSha)
+	objectContent, err := catObject(fullSha)
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
@@ -57,7 +56,7 @@ func catFileCmd() *Status {
 	}
 
 	// blob(object type) 4(size)\000test(content)
-	fmt.Print(strings.Split(content.String(), "\x00")[1])
+	fmt.Print(strings.Split(objectContent.String(), "\x00")[1])
 
 	return &Status{
 		exitCode: ExitCodeOK,
@@ -148,30 +147,17 @@ func lsTreeCmd() *Status {
 	}
 
 	fullSha := os.Args[3]
-	content, err := os.ReadFile(objectPath(fullSha))
+	objectContent, err := catObject(fullSha)
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
-			err:      fmt.Errorf("Error reading blob object (binary data): %s\n", err),
+			err:      fmt.Errorf("Error reading tree object: %s\n", err),
 		}
 	}
-
-	reader, err := zlib.NewReader(bytes.NewBuffer(content))
-	defer reader.Close()
-
-	if err != nil {
-		return &Status{
-			exitCode: ExitCodeError,
-			err:      fmt.Errorf("Error decompressing blob object (binary data): %s\n", err),
-		}
-	}
-
-	fileContentBuffer := new(bytes.Buffer)
-	fileContentBuffer.ReadFrom(reader)
 
 	var result []string
 
-	fileContentlist := strings.Split(fileContentBuffer.String(), "\x00")[1:]
+	fileContentlist := strings.Split(objectContent.String(), "\x00")[1:]
 	for i := 0; i < len(fileContentlist)-1; i++ {
 		temp := strings.Split(fileContentlist[i], " ")
 		result = append(result, temp[len(temp)-1])

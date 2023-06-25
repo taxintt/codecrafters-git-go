@@ -75,6 +75,7 @@ func writeObject(header string, content []byte) (sha [20]byte, _ error) {
 	sha = sha1.Sum(data.Bytes())
 	shaStr := fmt.Sprintf("%x", sha)
 	log.Printf("SHA: %x", sha)
+
 	path := objectPath(shaStr)
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		// already exists or unexpected errors
