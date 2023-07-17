@@ -211,30 +211,36 @@ func fetchLatestCommitHash(repositoryURL string) (string, error) {
 	if _, err := readPacketLine(reader); err != nil {
 		return "", err
 	}
-	// read "<commit sha> HEAD\0..."
+	// read "0155 <commit sha> HEADmulti_ack..."
+	// 0155 39065120688df73291eb9ec890bd5fd72e2bc9f1 HEADmulti_ack
 	head, err := readPacketLine(reader)
 	if err != nil {
 		return "", err
 	}
-	split := strings.Split(string(head), " ")
-	return split[0], nil
+
+	// extract commit sha from head
+	commitHash := strings.Split(string(head), " ")[0]
+	return commitHash, nil
 }
 
+// read packet line sequentially from reader
 func readPacketLine(reader io.Reader) ([]byte, error) {
+	// e.g.) string(hex)=001e → size=30
 	hex := make([]byte, 4)
 	if _, err := reader.Read(hex); err != nil {
 		return []byte{}, err
 	}
-
-	// e.g.) string(hex)=001e → size=30
 	size, err := strconv.ParseInt(string(hex), 16, 64)
 	if err != nil {
 		return []byte{}, err
 	}
+
 	// Return immediately for "0000".
 	if size == 0 {
 		return []byte{}, nil
 	}
+
+	// read content and write to buf
 	buf := make([]byte, size-4)
 	if _, err := reader.Read(buf); err != nil {
 		return []byte{}, err
@@ -243,20 +249,22 @@ func readPacketLine(reader io.Reader) ([]byte, error) {
 }
 
 // write $repo/.git/refs/heads/<branch>
-func writeBranchRefFile(repoPath string, branch string, commit string) error {
-	refPath := path.Join(repoPath, ".git", "refs", "heads", branch)
-	if err := os.MkdirAll(path.Dir(refPath), 0750); err != nil && !os.IsExist(err) {
+func writeBranchRefFile(repoPath string, branch string, commitSha string) error {
+	refFilePath := path.Join(repoPath, ".git", "refs", "heads", branch)
+	if err := os.MkdirAll(path.Dir(refFilePath), 0750); err != nil && !os.IsExist(err) {
 		return err
 	}
-	refFileContents := []byte(commit)
-	if err := ioutil.WriteFile(refPath, refFileContents, 0644); err != nil {
+	refFileContent := []byte(commitSha)
+	if err := ioutil.WriteFile(refFilePath, refFileContent, 0644); err != nil {
 		return err
 	}
 	return nil
 }
 
-func fetchObjects(gitRepositryURL, commitSha string) error {
-	packfileBuf := fetchPackfile(gitRepositryURL, commitSha)
+func fetchObjects(gitRepositoryURL, commitSha string) error {
+	// Reference discovery
+	packfileBuf := fetchPackfile(gitRepositoryURL, commitSha)
+
 	sign := packfileBuf[:4]
 	version := binary.BigEndian.Uint32(packfileBuf[4:8])
 	numObjects := binary.BigEndian.Uint32(packfileBuf[8:12])
@@ -270,6 +278,7 @@ func fetchObjects(gitRepositryURL, commitSha string) error {
 	if !bytes.Equal(storedChecksum[:], calculatedChecksum) {
 		log.Printf("[Error] expected checksum: %v, but got: %v", storedChecksum, calculatedChecksum)
 	}
+
 	headerLen := 12
 	bufReader := bytes.NewReader(packfileBuf[headerLen:])
 	for {
@@ -288,6 +297,7 @@ func fetchObjects(gitRepositryURL, commitSha string) error {
 
 func fetchPackfile(gitUrl, commitSha string) []byte {
 	buf := bytes.NewBuffer([]byte{})
+
 	// Without progress.
 	buf.WriteString(packetLine(fmt.Sprintf("want %s no-progress\n", commitSha)))
 	buf.WriteString("0000")
