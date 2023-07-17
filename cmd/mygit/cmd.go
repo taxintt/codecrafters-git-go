@@ -279,6 +279,7 @@ func cloneCmd() *Status {
 	}
 
 	commitSha, err := fetchLatestCommitHash(gitRepositoryURL)
+	fmt.Println(commitSha)
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
