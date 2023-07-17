@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
 // ./your_git.sh init
-func initCmd() *Status {
+func initCmd(path string) *Status {
 	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return &Status{
@@ -226,6 +227,70 @@ func writeTreeCmd() *Status {
 		return &Status{
 			exitCode: ExitCodeError,
 			err:      fmt.Errorf("error writing tree object: %s\n", err),
+		}
+	}
+
+	return &Status{
+		exitCode: ExitCodeOK,
+		err:      nil,
+	}
+}
+
+// ./your_git.sh clone https://github.com/blah/blah <some_dir>
+func cloneCmd() *Status {
+	gitRepositoryURL := os.Args[2]
+	directory := os.Args[3]
+
+	repoPath := path.Join(".", directory)
+	if err := os.MkdirAll(repoPath, 0750); err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error creating directory: %s\n", err),
+		}
+	}
+
+	status := initCmd(repoPath)
+	if status.err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error initializing git repository: %s\n", status.err),
+		}
+	}
+
+	commitSha, err := fetchLatestCommitHash(gitRepositoryURL)
+	if err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error fetching latest commit hash: %s\n", err),
+		}
+	}
+
+	if err := writeBranchRefFile(repoPath, "master", commitSha); err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error writing branch ref file: %s\n", err),
+		}
+	}
+
+	// Fetch objects.
+	if err := fetchObjects(gitRepositoryURL, commitSha); err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error fetching objects: %s\n", err),
+		}
+	}
+
+	if err := writeFetchedObjects(repoPath); err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error writing fetched objects: %s\n", err),
+		}
+	}
+	// Restore files committed at the commit sha.
+	if err := restoreRepository(repoPath, commitSha); err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("error restoring repository: %s\n", err),
 		}
 	}
 

@@ -30,7 +30,7 @@ func run(args []string) *Status {
 
 	switch command := os.Args[1]; command {
 	case "init":
-		result = initCmd()
+		result = initCmd(".")
 
 	case "cat-file":
 		result = catFileCmd()
@@ -46,6 +46,9 @@ func run(args []string) *Status {
 
 	case "commit-tree":
 		result = createCommitCmd()
+
+	case "clone":
+		result = cloneCmd()
 
 	default:
 		return &Status{
