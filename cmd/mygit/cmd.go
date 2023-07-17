@@ -270,7 +270,7 @@ func cloneCmd() *Status {
 		}
 	}
 
-	status := initGitRepository(repoPath)
+	status := initCmd(repoPath)
 	if status.err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
