@@ -372,7 +372,7 @@ func readObject(reader *bytes.Reader) error {
 			return err
 		}
 	} else if objType == objOfsDelta {
-		// TODO(south37): Impl
+		// TODO : Implement.
 		return errors.New("Unsupported")
 	} else {
 		decompressed, err := decompressObject(reader)
@@ -498,8 +498,7 @@ func readDeltified(reader *bytes.Buffer, baseObj *Object) (*bytes.Buffer, error)
 }
 
 func saveObj(o *Object) error {
-	// FIXME ? : changed to use createHash() instead of sha()
-	objSha, err := createHash(o.Buf)
+	objSha, err := o.sha()
 	if err != nil {
 		return err
 	}
@@ -507,6 +506,14 @@ func saveObj(o *Object) error {
 	// log.Printf("[Debug] obj sha: %s\n", objSha)
 	// log.Printf("[Debug] actual obj len: %d\n", len(o.Buf))
 	return nil
+}
+
+func (o *Object) sha() (string, error) {
+	b, err := o.wrappedBuf()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha1.Sum(b)), nil
 }
 
 // Write objects in shaToObj to .git/objects.
