@@ -22,6 +22,7 @@ import (
 )
 
 const (
+	// ref: https://github.com/git/git/blob/830b4a04c45bf0a6db26defe02ed1f490acd18ee/Documentation/gitformat-pack.txt#L70-L79
 	objCommit   = 1
 	objTree     = 2
 	objBlob     = 3
@@ -262,9 +263,10 @@ func writeBranchRefFile(repoPath string, branch string, commitSha string) error 
 }
 
 func fetchObjects(gitRepositoryURL, commitSha string) error {
-	// Reference discovery
+	// do Reference discovery
 	packfileBuf := fetchPackfile(gitRepositoryURL, commitSha)
 
+	// parse packfile for debugging
 	sign := packfileBuf[:4]
 	version := binary.BigEndian.Uint32(packfileBuf[4:8])
 	numObjects := binary.BigEndian.Uint32(packfileBuf[8:12])
@@ -272,6 +274,7 @@ func fetchObjects(gitRepositoryURL, commitSha string) error {
 	log.Printf("[Debug] version: %d\n", version)
 	log.Printf("[Debug] num objects: %d\n", numObjects)
 
+	// verify checksum
 	checksumLen := 20
 	calculatedChecksum := packfileBuf[len(packfileBuf)-checksumLen:]
 	storedChecksum := sha1.Sum(packfileBuf[:len(packfileBuf)-checksumLen])
@@ -279,6 +282,7 @@ func fetchObjects(gitRepositoryURL, commitSha string) error {
 		log.Printf("[Error] expected checksum: %v, but got: %v", storedChecksum, calculatedChecksum)
 	}
 
+	// read objects from packfile except for header
 	headerLen := 12
 	bufReader := bytes.NewReader(packfileBuf[headerLen:])
 	for {
@@ -298,26 +302,23 @@ func fetchObjects(gitRepositoryURL, commitSha string) error {
 func fetchPackfile(gitUrl, commitSha string) []byte {
 	buf := bytes.NewBuffer([]byte{})
 
-	// Without progress.
+	// write no-progress for Packfile negotiation
 	buf.WriteString(packetLine(fmt.Sprintf("want %s no-progress\n", commitSha)))
 	buf.WriteString("0000")
 	buf.WriteString(packetLine("done\n"))
-	uploadPackUrl := fmt.Sprintf("%s/git-upload-pack", gitUrl)
-	log.Printf("[Debug] url: %s\n", uploadPackUrl)
 
-	// contentType := "application/x-git-upload-pack-request"
-	// resp, err := http.Post(url, contentType, buf)
+	// do Packfile negotiation
+	uploadPackUrl := fmt.Sprintf("%s/git-upload-pack", gitUrl)
 	resp, err := http.Post(uploadPackUrl, "", buf)
 	if err != nil {
 		log.Fatalf("[Error] Error in git-upload-pack request: %v\n", err)
 	}
-	// log.Printf("[Debug] resp: %+v\n", resp)
 	result := bytes.NewBuffer([]byte{})
 	if _, err := io.Copy(result, resp.Body); err != nil {
 		log.Fatal(err)
 	}
 	// log.Printf("[Debug] resp body: %v\n", result)
-	packfileBuf := result.Bytes()[8:] // skip "0008NAK\n"
+	packfileBuf := result.Bytes()[8:] // skip like "0031ACK\n"
 	return packfileBuf
 }
 
@@ -334,15 +335,13 @@ func readSha(reader io.Reader) (string, error) {
 	return fmt.Sprintf("%x", sha), nil
 }
 
-// Read objects.
+// Read objects from packfile.
 func readObject(reader *bytes.Reader) error {
 	objType, objLen, err := readObjectTypeAndLen(reader)
 	if err != nil {
 		return err
 	}
-	// log.Printf("[Debug] obj type: %d\n", objType)
-	// log.Printf("[Debug] obj len: %d\n", objLen)
-	// log.Printf("[Debug] read data: %x\n", data[:n])
+
 	if objType == objRefDelta {
 		baseObjSha, err := readSha(reader)
 		if err != nil {
@@ -356,15 +355,12 @@ func readObject(reader *bytes.Reader) error {
 		if err != nil {
 			return err
 		}
-		// log.Printf("[Debug] decompressed len: %d\n", decompressed.Len())
-		// log.Printf("[Debug] decompressed: %x\n", decompressed.Bytes()[:20])
+
 		deltified, err := readDeltified(decompressed, &baseObj)
 		if err != nil {
 			return err
 		}
-		// log.Printf("[Debug] deltified: %x\n", deltified.Bytes())
-		// log.Printf("[Debug] deltified len: %d\n", deltified.Len())
-		// log.Printf("[Debug] deltified: %s\n", string(deltified.Bytes()))
+
 		obj := Object{
 			Type: baseObj.Type,
 			Buf:  deltified.Bytes(),
@@ -373,7 +369,7 @@ func readObject(reader *bytes.Reader) error {
 			return err
 		}
 	} else if objType == objOfsDelta {
-		// TODO : Implement.
+		// TODO : Implement this section
 		return errors.New("Unsupported")
 	} else {
 		decompressed, err := decompressObject(reader)
@@ -435,6 +431,7 @@ func decompressObject(reader *bytes.Reader) (*bytes.Buffer, error) {
 	return decompressed, nil
 }
 
+// ref: https://git-scm.com/docs/pack-format#_deltified_representation
 func readDeltified(reader *bytes.Buffer, baseObj *Object) (*bytes.Buffer, error) {
 	// srcObjLen, err := binary.ReadUvarint(reader)
 	_, err := binary.ReadUvarint(reader)
