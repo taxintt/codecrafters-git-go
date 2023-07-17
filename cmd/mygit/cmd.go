@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -36,27 +37,6 @@ func initCmd(path string) *Status {
 		exitCode: ExitCodeOK,
 		err:      nil,
 	}
-}
-
-func initGitRepository(repoPath string) *Status {
-	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
-		dirPath := path.Join(repoPath, dir)
-		if err := os.Mkdir(dirPath, 0755); err != nil && !os.IsExist(err) {
-			return &Status{
-				exitCode: ExitCodeError,
-				err:      fmt.Errorf("Error creating directory: %s\n", err.Error()),
-			}
-		}
-	}
-	headFileContents := []byte("ref: refs/heads/master\n")
-	headPath := path.Join(repoPath, ".git/HEAD")
-	if err := ioutil.WriteFile(headPath, headFileContents, 0644); err != nil {
-		return &Status{
-			exitCode: ExitCodeError,
-			err:      fmt.Errorf("Error writing file: %s\n", err.Error()),
-		}
-	}
-	return nil
 }
 
 // ./your_git.sh cat-file -p <blob_sha>
@@ -279,7 +259,7 @@ func cloneCmd() *Status {
 	}
 
 	commitSha, err := fetchLatestCommitHash(gitRepositoryURL)
-	fmt.Println(commitSha)
+	log.Printf("[Debug] the sha of latest commit: %s\n", commitSha)
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
