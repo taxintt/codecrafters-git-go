@@ -261,9 +261,8 @@ func cloneCmd() *Status {
 		}
 	}
 
-	// the sha of latest commit: 7b8eb72b9dfa14a28ed22d7618b3cdecaa5d5be0
+	// latest commit: 7b8eb72b9dfa14a28ed22d7618b3cdecaa5d5be0
 	commitSha, err := fetchLatestCommitHash(gitRepositoryURL)
-	log.Printf("[Debug] the sha of latest commit: %s\n", commitSha)
 	if err != nil {
 		return &Status{
 			exitCode: ExitCodeError,

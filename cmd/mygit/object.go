@@ -212,15 +212,15 @@ func fetchLatestCommitHash(repositoryURL string) (string, error) {
 	}
 
 	reader := bufio.NewReader(buf)
-	// consume "001e# service=git-upload-pack\n"
+	// read "001e# service=git-upload-pack\n"
 	if _, err := readPacketLine(reader); err != nil {
 		return "", err
 	}
-	// consume "0000"
+	// read "0000"
 	if _, err := readPacketLine(reader); err != nil {
 		return "", err
 	}
-	// Read "<commit sha> HEAD\0..."
+	// read "<commit sha> HEAD\0..."
 	head, err := readPacketLine(reader)
 	if err != nil {
 		return "", err
@@ -575,7 +575,6 @@ func (o *Object) typeString() (string, error) {
 	case objBlob:
 		return "blob", nil
 	default:
-		// Does not have appropriate representation.
 		return "", errors.New(fmt.Sprintf("Invalid type: %d", o.Type))
 	}
 }
