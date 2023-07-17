@@ -14,9 +14,10 @@ import (
 )
 
 // ./your_git.sh init
-func initCmd(path string) *Status {
+func initCmd(repoPath string) *Status {
 	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		dirPath := path.Join(repoPath, dir)
+		if err := os.Mkdir(dirPath, 0755); err != nil {
 			return &Status{
 				exitCode: ExitCodeError,
 				err:      fmt.Errorf("Error creating directory: %s\n", err.Error()),
@@ -25,7 +26,8 @@ func initCmd(path string) *Status {
 	}
 
 	headFileContents := []byte("ref: refs/heads/master\n")
-	if err := os.WriteFile(".git/HEAD", headFileContents, 0644); err != nil {
+	headPath := path.Join(repoPath, ".git/HEAD")
+	if err := ioutil.WriteFile(headPath, headFileContents, 0644); err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
 			err:      fmt.Errorf("Error writing file: %s\n", err.Error()),
@@ -249,6 +251,7 @@ func cloneCmd() *Status {
 			err:      fmt.Errorf("error creating directory: %s\n", err),
 		}
 	}
+	log.Printf("[Debug] git url: %s, dir: %s\n", gitRepositoryURL, directory)
 
 	status := initCmd(repoPath)
 	if status.err != nil {
@@ -258,6 +261,7 @@ func cloneCmd() *Status {
 		}
 	}
 
+	// the sha of latest commit: 7b8eb72b9dfa14a28ed22d7618b3cdecaa5d5be0
 	commitSha, err := fetchLatestCommitHash(gitRepositoryURL)
 	log.Printf("[Debug] the sha of latest commit: %s\n", commitSha)
 	if err != nil {
