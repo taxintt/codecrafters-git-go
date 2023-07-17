@@ -38,6 +38,27 @@ func initCmd(path string) *Status {
 	}
 }
 
+func initGitRepository(repoPath string) *Status {
+	for _, dir := range []string{".git", ".git/objects", ".git/refs"} {
+		dirPath := path.Join(repoPath, dir)
+		if err := os.Mkdir(dirPath, 0755); err != nil && !os.IsExist(err) {
+			return &Status{
+				exitCode: ExitCodeError,
+				err:      fmt.Errorf("Error creating directory: %s\n", err.Error()),
+			}
+		}
+	}
+	headFileContents := []byte("ref: refs/heads/master\n")
+	headPath := path.Join(repoPath, ".git/HEAD")
+	if err := ioutil.WriteFile(headPath, headFileContents, 0644); err != nil {
+		return &Status{
+			exitCode: ExitCodeError,
+			err:      fmt.Errorf("Error writing file: %s\n", err.Error()),
+		}
+	}
+	return nil
+}
+
 // ./your_git.sh cat-file -p <blob_sha>
 func catFileCmd() *Status {
 	if len(os.Args) < 3 {
@@ -249,7 +270,7 @@ func cloneCmd() *Status {
 		}
 	}
 
-	status := initCmd(repoPath)
+	status := initGitRepository(repoPath)
 	if status.err != nil {
 		return &Status{
 			exitCode: ExitCodeError,
